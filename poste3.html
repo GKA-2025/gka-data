@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<button onclick="location.href='index.html'"
+        style="margin-bottom:20px;padding:10px 20px;">
+  ⬅ Retour à l’accueil
+</button>
+
+  <meta charset="UTF-8">
+  <title>Dashboard IoT – Qualité de l’eau</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f6f8;
+    }
+
+    h2, h3 {
+      margin-top: 30px;
+    }
+
+    .chart-container {
+      margin-bottom: 40px;
+    }
+
+    canvas {
+      max-width: 1000px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: white;
+      margin-top: 15px;
+    }
+
+    th, td {
+      border: 1px solid #ccc;
+      padding: 6px;
+      text-align: center;
+    }
+
+    th {
+      background: #2c3e50;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+
+<h2>📊 Station GKA_POSTE_3</h2>
+
+<div class="chart-container">
+  <h3>🌡 TEMPERATURE </h3>
+  <canvas id="tempChart"></canvas>
+</div>
+
+<div class="chart-container">
+  <h3>💧 OXYGENE DISSOUS </h3>
+  <canvas id="doChart"></canvas>
+</div>
+
+<div class="chart-container">
+  <h3>⚡ CONDUCTIVITE ELECTRIQUE</h3>
+  <canvas id="ecChart"></canvas>
+</div>
+
+<div class="chart-container">
+  <h3>🧪 pH DE L'EAU</h3>
+  <canvas id="phChart"></canvas>
+</div>
+
+<h3>📋Base de Données Poste_3</h3>
+<table>
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>Heure</th>
+      <th>DO</th>
+      <th>EC</th>
+      <th>pH</th>
+      <th>Température (°C)</th>
+    </tr>
+  </thead>
+  <tbody id="dataTable"></tbody>
+</table>
+
+<script>
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbyAjWjtUPO-J79W2GOe3sXon59dkDPoBKxsFhkwzV-7-RzTypaxdSDFc7_nTAiNccQI/exec?mode=read";
+
+fetch(API_URL)
+  .then(res => res.json())
+  .then(data => {
+
+    /* ===== TABLEAU ===== */
+    const tableBody = document.getElementById("dataTable");
+    data.forEach(d => {
+      tableBody.innerHTML += `
+        <tr>
+          <td>${d["Date"]}</td>
+          <td>${d["Heure"]}</td>
+          <td>${d["DO"]}</td>
+          <td>${d["EC"]}</td>
+          <td>${d["pH"]}</td>
+          <td>${d["Température"]}</td>
+        </tr>`;
+    });
+
+    /* ===== FONCTION D’AGRÉGATION PAR JOUR ===== */
+    function aggregateByDay(field, invalidValues = []) {
+      const byDay = {};
+
+      data.forEach(d => {
+        const date = d["Date"];
+        const value = parseFloat(d[field]);
+
+        if (isNaN(value)) return;
+        if (invalidValues.includes(value)) return;
+
+        if (!byDay[date]) {
+          byDay[date] = { sum: 0, count: 0 };
+        }
+
+        byDay[date].sum += value;
+        byDay[date].count++;
+      });
+
+      const labels = Object.keys(byDay);
+      const values = labels.map(date =>
+        (byDay[date].sum / byDay[date].count).toFixed(2)
+      );
+
+      return { labels, values };
+    }
+
+    /* ===== AGRÉGATION DES CAPTEURS ===== */
+    const tempData = aggregateByDay("Température", [-127]);
+    const doData   = aggregateByDay("DO", [0]);
+    const ecData   = aggregateByDay("EC", [0]);
+    const phData   = aggregateByDay("pH", [0]);
+
+    /* ===== FONCTION CRÉATION GRAPHIQUE ===== */
+    function createChart(canvasId, label, labels, data) {
+      new Chart(document.getElementById(canvasId), {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [{
+            label: label,
+            data: data,
+            borderWidth: 2,
+            tension: 0.3,
+            pointRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              title: {
+                display: true,
+                text: label
+              }
+            },
+            x: {
+              title: {
+                display: true,
+                text: "Jour"
+              }
+            }
+          }
+        }
+      });
+    }
+
+    /* ===== CRÉATION DES 4 GRAPHIQUES ===== */
+    createChart("tempChart", "Température (°C)", tempData.labels, tempData.values);
+    createChart("doChart",   "DO",               doData.labels,   doData.values);
+    createChart("ecChart",   "EC",               ecData.labels,   ecData.values);
+    createChart("phChart",   "pH",               phData.labels,   phData.values);
+
+  })
+  .catch(err => {
+    console.error(err);
+    alert("Erreur de chargement des données");
+  });
+</script>
+
+</body>
+</html>
